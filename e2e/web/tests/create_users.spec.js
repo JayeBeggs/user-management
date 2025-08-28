@@ -321,7 +321,168 @@ test.describe('Signup flow creates multiple users via app with OTP', () => {
         await cdmPage.goto(cdmUrl);
         await cdmPage.waitForLoadState('domcontentloaded');
         console.log('Opened CDM UI (auth only):', { cdmUrl });
-        const cdmDelay = parseInt(process.env.INSPECT_CDM_DELAY_MS || process.env.INSPECT_DELAY_MS || '10000', 10);
+        // Navigate directly to Verification page (faster than clicking)
+        try {
+          const base = new URL(cdmUrl).origin;
+          const verifyUrl = base + '/users/identity-verification/';
+          console.log('Opening Verification URL:', verifyUrl);
+          await cdmPage.goto(verifyUrl, { waitUntil: 'domcontentloaded', timeout: 10000 }).catch(() => {});
+          // Jump to the row matching the new user's ID (fast path: parse <tr onclick> and navigate directly)
+          try {
+            const idText = String(media.id);
+            await cdmPage.waitForSelector('tr', { timeout: 5000 }).catch(() => {});
+            const row = cdmPage.locator(`tr:has(td:has-text("${idText}"))`).first();
+            if (await row.count()) {
+              // Parse onclick URL to avoid slow click/handlers
+              const relative = await row.evaluate((el) => {
+                const m = (el.getAttribute('onclick') || '').match(/'([^']+)'/);
+                return m ? m[1] : null;
+              });
+              if (relative) {
+                const dest = new URL(relative, cdmPage.url()).toString();
+                await cdmPage.goto(dest);
+              } else {
+                // Fallback to force click if no onclick found
+                await row.click({ timeout: 1500, force: true });
+              }
+              // On the verification detail page: tick first block, submit and wait for reload, then tick second block and submit
+              try {
+                const labelMap = {
+                  image_contains_id: 'Image contains an ID',
+                  id_readable: 'ID is readable and not blurry',
+                  id_of_person: 'Image is the ID of the person signing up',
+                  image_in_color: 'Image is in colour',
+                  id_condition: 'ID is in an acceptable condition',
+                  id_in_frame: 'The ID is in frame',
+                  latest_id: 'ID provided is the latest issued ID'
+                };
+                const firstNames = ['image_contains_id','id_readable','id_of_person','image_in_color','id_condition','id_in_frame'];
+                const secondNames = ['image_contains_id','id_readable','id_of_person','image_in_color','id_condition','id_in_frame','latest_id'];
+                const afterSubmitDelay = parseInt(process.env.INSPECT_CDM_AFTER_SUBMIT_MS || '30000', 10);
+                const tickInBlock = async (block, name) => {
+                  let cb = block.locator(`input[name="${name}"]`);
+                  if (!(await cb.count())) cb = block.locator(`#id_${name}`);
+                  if (await cb.count()) {
+                    const checked = await cb.isChecked().catch(() => false);
+                    if (!checked) { await cb.check({ timeout: 800, force: true }).catch(async () => { await cb.click({ timeout: 800, force: true }); }); }
+                    return;
+                  }
+                  const labelText = labelMap[name];
+                  if (labelText) {
+                    const label = block.locator(`label:has-text("${labelText}")`).first();
+                    if (await label.count()) await label.click({ timeout: 800, force: true });
+                  }
+                };
+                // First block
+                let blocks = cdmPage.locator('div.my-4');
+                await blocks.first().waitFor({ timeout: 5000 }).catch(() => {});
+                let firstBlock = blocks.nth(0);
+                for (const n of firstNames) { await tickInBlock(firstBlock, n); }
+                // Submit and wait
+                let form = firstBlock.locator('xpath=ancestor::form[1]');
+                let submit = form.locator('button[type="submit"]:not([onclick*="startVoipCall"]) , input[type="submit"]:not([onclick*="startVoipCall"]) , button:has-text("Submit"):not([onclick*="startVoipCall"]) , [role="button"]:has-text("Submit"):not([onclick*="startVoipCall"])').first();
+                if (await submit.count()) {
+                  await Promise.all([
+                    cdmPage.waitForLoadState('domcontentloaded').catch(() => {}),
+                    submit.click({ timeout: 2000, force: true })
+                  ]);
+                  //if (afterSubmitDelay > 0) await cdmPage.waitForTimeout(afterSubmitDelay);
+                }
+                // After reload, handle second block (wait for a marker unique to block 2)
+                blocks = cdmPage.locator('div.my-4');
+                let secondBlock = blocks.nth(1);
+                try {
+                  const latestLabel = cdmPage.locator('label:has-text("ID provided is the latest issued ID")').first();
+                  await latestLabel.waitFor({ timeout: 15000 });
+                  secondBlock = latestLabel.locator('xpath=ancestor::div[contains(@class, "my-4")][1]');
+                } catch {}
+                if (await secondBlock.count()) {
+                  for (const n of secondNames) { await tickInBlock(secondBlock, n); }
+                  form = secondBlock.locator('xpath=ancestor::form[1]');
+                  submit = form.locator('button[type="submit"]:not([onclick*="startVoipCall"]) , input[type="submit"]:not([onclick*="startVoipCall"]) , button:has-text("Submit"):not([onclick*="startVoipCall"]) , [role="button"]:has-text("Submit"):not([onclick*="startVoipCall"])').first();
+                  if (await submit.count()) {
+                    await Promise.all([
+                      cdmPage.waitForLoadState('domcontentloaded').catch(() => {}),
+                      submit.click({ timeout: 2000, force: true })
+                    ]);
+                    //if (afterSubmitDelay > 0) await cdmPage.waitForTimeout(afterSubmitDelay);
+                  }
+                }
+                // Handle race update form next
+                try {
+                  // Find form by action or class
+                  const raceForm = cdmPage.locator('form.update-form[action*="/users/update-race/"]');
+                  await raceForm.first().waitFor({ timeout: 10000 });
+                  // Select a race (default to White unless RACE_OPTION env provided)
+                  const raceValue = (process.env.RACE_OPTION || 'coloured').toLowerCase();
+                  const select = raceForm.locator('select#id_race, select[name="race"]').first();
+                  // Try by value, then by visible text, then via keyboard
+                  let selected = false;
+                  try { await select.selectOption(raceValue); selected = true; } catch {}
+                  if (!selected) {
+                    const label = raceValue.charAt(0).toUpperCase() + raceValue.slice(1);
+                    try { await select.selectOption({ label }); selected = true; } catch {}
+                  }
+                  if (!selected) {
+                    await select.click({ force: true });
+                    await cdmPage.keyboard.type(raceValue, { delay: 10 });
+                    await cdmPage.keyboard.press('Enter');
+                  }
+                  const updateBtn = raceForm.locator('button.btn.btn-accent, button:has-text("Update"), input[type="submit"]').first();
+                  if (await updateBtn.count()) {
+                    await Promise.all([
+                      cdmPage.waitForLoadState('domcontentloaded').catch(() => {}),
+                      updateBtn.click({ timeout: 2000, force: true })
+                    ]);
+                    const afterRaceDelay = parseInt(process.env.INSPECT_CDM_AFTER_RACE_MS || process.env.INSPECT_CDM_AFTER_SUBMIT_MS || '15000', 10);
+                    if (afterRaceDelay > 0) await cdmPage.waitForTimeout(afterRaceDelay);
+                  }
+                } catch {}
+
+                // Handle liveness review form and final approve
+                try {
+                  const reviewForm = cdmPage.locator('form.review-form[action*="/users/review-liveness/"]');
+                  await reviewForm.first().waitFor({ timeout: 10000 });
+                  const liveNames = ['person_visible','enough_light','person_matches_id','sound_recorded','client_confirmed'];
+                  const tickLive = async (name) => {
+                    let cb = reviewForm.locator(`input[name="${name}"]`);
+                    if (!(await cb.count())) cb = reviewForm.locator(`#id_${name}`);
+                    if (await cb.count()) {
+                      const checked = await cb.isChecked().catch(() => false);
+                      if (!checked) { await cb.check({ timeout: 800, force: true }).catch(async () => { await cb.click({ timeout: 800, force: true }); }); }
+                      return;
+                    }
+                    const label = reviewForm.locator(`label:has-text("${name.replace(/_/g, ' ')}")`).first();
+                    if (await label.count()) await label.click({ timeout: 800, force: true });
+                  };
+                  for (const n of liveNames) { await tickLive(n); }
+                  const submitLive = reviewForm.locator('button[type="submit"]:not([onclick*="startVoipCall"]) , input[type="submit"]:not([onclick*="startVoipCall"]) , button:has-text("Submit"):not([onclick*="startVoipCall"])').first();
+                  if (await submitLive.count()) {
+                    await Promise.all([
+                      cdmPage.waitForLoadState('domcontentloaded').catch(() => {}),
+                      submitLive.click({ timeout: 1500, force: true })
+                    ]);
+                  }
+                  // After reload, click Approve
+                  try {
+                    const approveBtn = cdmPage.locator('button:has-text("Approve"), [role="button"]:has-text("Approve"), .btn:has-text("Approve")').first();
+                    await approveBtn.waitFor({ timeout: 8000 });
+                    await approveBtn.click({ timeout: 1500, force: true });
+                    const afterApproveDelay = parseInt(process.env.INSPECT_CDM_AFTER_APPROVE_MS || '3000', 10);
+                    if (afterApproveDelay > 0) await cdmPage.waitForTimeout(afterApproveDelay);
+                    // Refresh the main app window after approval and optionally wait
+                    try {
+                      await page.reload({ waitUntil: 'domcontentloaded' });
+                      const appDelay = parseInt(process.env.INSPECT_APP_AFTER_APPROVE_MS || '0', 10);
+                      if (appDelay > 0) await page.waitForTimeout(appDelay);
+                    } catch {}
+                  } catch {}
+                } catch {}
+              } catch {}
+            }
+          } catch {}
+        } catch {}
+        const cdmDelay = parseInt(process.env.INSPECT_CDM_DELAY_MS || process.env.INSPECT_DELAY_MS || '90000', 10);
         if (cdmDelay > 0) await cdmPage.waitForTimeout(cdmDelay);
         const keepOpen = process.env.INSPECT_CDM_KEEP_OPEN === '1';
         if (!keepOpen) {

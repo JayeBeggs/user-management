@@ -26,7 +26,7 @@ export async function uploadIdSection(page, sectionHeadingText, filePath) {
   const fileChooser = await fileChooserPromise;
   if (fileChooser) { await fileChooser.setFiles(filePath); return true; }
   let targetInput = heading.locator('xpath=following::input[@type="file"][1]').first();
-  await page.waitForFunction((sel, prev) => document.querySelectorAll(sel).length >= prev, 'input[type="file"]', beforeCount, { timeout: 3000 }).catch(() => {});
+  await page.waitForFunction((sel, prev) => document.querySelectorAll(sel).length >= prev, 'input[type="file"]', beforeCount, { timeout: 1000 }).catch(() => {});
   const afterCount = await inputs.count();
   if (afterCount > 0) {
     const newestIndex = Math.max(0, afterCount - 1);
