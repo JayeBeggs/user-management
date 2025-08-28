@@ -2,42 +2,50 @@
 import { chromium } from '@playwright/test';
 import fs from 'fs';
 import path from 'path';
+import dotenv from 'dotenv';
 
-const CDM_URL = process.env.CDM_WEB_URL || 'https://cdm.st4ge.com';
-const DJANGO_ADMIN_USERS_URL = process.env.DJANGO_ADMIN_USERS_URL || CDM_URL + '/users';
+dotenv.config({ path: '.env' });
+dotenv.config({ path: '.env.local', override: true });
+
+const USERS_URL = process.env.DJANGO_ADMIN_USERS_URL || 'https://cdm.st4ge.com/2tNFZrSGvTr9CqKM8Wsf5alcO9mBNwo4/users/user/';
+const ADMIN_ROOT = USERS_URL.replace(/users\/user\/?\.*/, '');
 const OUT = process.env.PLAYWRIGHT_CDM_STATE || './e2e/web/auth/.cdm_state.json';
 
 async function main() {
   const browser = await chromium.launch({ headless: false });
   const context = await browser.newContext();
   const page = await context.newPage();
-  await page.goto(DJANGO_ADMIN_USERS_URL);
 
-  const waitSelector = process.env.CDM_WAIT_SELECTOR; // e.g. text=Users
-  const waitUrlRegex = process.env.CDM_WAIT_URL_REGEX;
-  const waitSeconds = parseInt(process.env.CDM_WAIT_SECONDS || '300', 10);
-  const waitMs = waitSeconds * 1000;
-
-  console.log('Complete Google/CDM admin login in the opened browser.');
-  if (waitSelector) {
-    console.log(`Waiting for selector: ${waitSelector}`);
-    await page.waitForSelector(waitSelector, { timeout: waitMs });
-  } else if (waitUrlRegex) {
-    console.log(`Waiting for URL to match: ${waitUrlRegex}`);
-    await page.waitForURL(new RegExp(waitUrlRegex), { timeout: waitMs });
-  } else {
-    console.log('Press Enter here when admin page is loaded to save the session...');
-    await new Promise((resolve) => {
-      process.stdin.setEncoding('utf8');
-      process.stdin.resume();
-      process.stdin.once('data', () => resolve());
-    });
+  const adminUsername = process.env.DJANGO_ADMIN_USERNAME || process.env.ADMIN_USERNAME || '';
+  const adminPassword = process.env.DJANGO_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || '';
+  if (!adminUsername || !adminPassword) {
+    throw new Error('Set DJANGO_ADMIN_USERNAME and DJANGO_ADMIN_PASSWORD to use this script.');
   }
+
+  console.log('Opening admin root:', ADMIN_ROOT);
+  await page.goto(ADMIN_ROOT);
+  await page.waitForLoadState('domcontentloaded');
+
+  const usernameInput = page.locator('input#id_username, input[name="username"]');
+  const passwordInput = page.locator('input#id_password, input[name="password"]');
+  await usernameInput.first().fill(adminUsername);
+  await passwordInput.first().fill(adminPassword);
+  const submitBtn = page.getByRole('button', { name: /log in|sign in|submit/i });
+  if (await submitBtn.count()) {
+    await submitBtn.first().click();
+  } else {
+    const form = page.locator('form');
+    if (await form.count()) await form.first().evaluate((f) => f.submit());
+  }
+
+  try {
+    await page.waitForSelector('a[href*="/logout/"], #content-main, .module', { timeout: 20000 });
+  } catch {}
 
   const outPath = path.resolve(process.cwd(), OUT);
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
   await context.storageState({ path: outPath });
-  console.log(`Saved CDM storage state to ${outPath}`);
+  console.log(`Saved CDM admin storage state to ${outPath}`);
   await browser.close();
 }
 

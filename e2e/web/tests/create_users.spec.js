@@ -1,5 +1,4 @@
 import { test, expect, chromium } from '@playwright/test';
-import fs from 'fs';
 
 const NUM_USERS = parseInt(process.env.NUM_USERS || '5', 10);
 
@@ -44,12 +43,6 @@ async function getOtpFromAdmin(browser) {
       }
       await page.waitForLoadState('networkidle').catch(() => {});
     }
-  } catch {}
-  // Save CDM auth state after admin login for reuse in CDM UI
-  try {
-    const defaultStatePath = 'e2e/web/auth/.app_state.json';
-    const outPath = process.env.CDM_STORAGE_STATE || process.env.PLAYWRIGHT_CDM_STATE || defaultStatePath;
-    await context.storageState({ path: outPath });
   } catch {}
   console.log('Opening admin OTP list:', otpListUrl);
   await page.goto(otpListUrl);
@@ -724,23 +717,24 @@ test.describe('Signup flow creates multiple users via app with OTP', () => {
         console.log('Final Continue clicked');
       } catch {}
 
-      // Open CDM UI in a brand-new Chrome window and pause for inspection/auth
+      // Open CDM UI after user creation (auth only window) using saved CDM state, then pause
       try {
         const cdmUrl = process.env.CDM_UI_URL || 'https://cdm.st4ge.com/';
         const channel = process.env.CDM_PW_BROWSER_CHANNEL || process.env.PW_BROWSER_CHANNEL || 'chrome';
         const launched = await chromium.launch({ channel, headless: process.env.HEADLESS === '1' });
-        const defaultStatePath = 'e2e/web/auth/.app_state.json';
-        const storageStatePath = process.env.CDM_STORAGE_STATE || process.env.PLAYWRIGHT_CDM_STATE || (fs.existsSync(defaultStatePath) ? defaultStatePath : undefined);
-        const ctx = storageStatePath
-          ? await launched.newContext({ storageState: storageStatePath })
-          : await launched.newContext();
+        const storageStatePath = process.env.PLAYWRIGHT_CDM_STATE || 'e2e/web/auth/.cdm_state.json';
+        let ctx;
+        try {
+          ctx = await launched.newContext({ storageState: storageStatePath });
+        } catch {
+          ctx = await launched.newContext();
+        }
         const cdmPage = await ctx.newPage();
         await cdmPage.goto(cdmUrl);
         await cdmPage.waitForLoadState('domcontentloaded');
-        console.log('Opened CDM UI:', { cdmUrl, storageStatePath: storageStatePath || null });
+        console.log('Opened CDM UI (auth only):', { cdmUrl });
         const cdmDelay = parseInt(process.env.INSPECT_CDM_DELAY_MS || process.env.INSPECT_DELAY_MS || '10000', 10);
         if (cdmDelay > 0) await cdmPage.waitForTimeout(cdmDelay);
-        // Optionally keep the CDM window open for manual verification
         const keepOpen = process.env.INSPECT_CDM_KEEP_OPEN === '1';
         if (!keepOpen) {
           await ctx.close();
