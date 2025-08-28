@@ -1,0 +1,36 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Playwright: Debug create_users",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/node_modules/@playwright/test/cli.js",
+      "args": [
+        "test",
+        "--config",
+        "e2e/web/playwright.config.ts",
+        "e2e/web/tests/create_users.spec.js"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "env": {
+        "PWDEBUG": "1",
+        "HEADLESS": "0"
+      },
+      "skipFiles": ["<node_internals>/**"],
+      "runtimeArgs": ["--inspect-brk"],
+      "outFiles": ["${workspaceFolder}/**/*.js"]
+    },
+    {
+      "name": "Attach: Node 9229",
+      "type": "node",
+      "request": "attach",
+      "port": 9229,
+      "restart": true,
+      "timeout": 30000,
+      "skipFiles": ["<node_internals>/**"]
+    }
+  ]
+}
+

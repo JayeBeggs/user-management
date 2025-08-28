@@ -1,0 +1,12 @@
+node_modules/
+playwright-report/
+playwright/.cache/
+test-results/
+e2e/.run_media/
+e2e/.run_media*/
+e2e/web/auth/.app_state.json
+e2e/web/auth/.cdm_state.json
+.DS_Store
+*.log
+.env
+.env.local
