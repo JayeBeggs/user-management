@@ -39,7 +39,7 @@ async function main() {
   }
 
   try {
-    await page.waitForSelector('a[href*="/logout/"], #content-main, .module', { timeout: 20000 });
+    await page.waitForSelector('a[href*="/logout/"], #content-main, .module', { timeout: parseInt(process.env.UNIVERSAL_WAIT_TIMEOUT || '3000', 10) });
   } catch {}
 
   const outPath = path.resolve(process.cwd(), OUT);

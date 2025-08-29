@@ -1,5 +1,5 @@
 /** Generic clicker by button text variants. */
-export async function clickButtonByText(page, texts, timeoutMs = 15000) {
+export async function clickButtonByText(page, texts, timeoutMs = parseInt(process.env.UNIVERSAL_WAIT_TIMEOUT || '3000', 10)) {
   const variants = Array.isArray(texts) ? texts : [texts];
   const selectors = [];
   for (const t of variants) {
@@ -14,13 +14,15 @@ export async function clickButtonByText(page, texts, timeoutMs = 15000) {
   }
   const btn = page.locator(selectors.join(', ')).first();
   await btn.waitFor({ timeout: timeoutMs }).catch(() => {});
-  try { await btn.click({ timeout: 2000, force: true }); return true; } catch {}
+  const clickTimeout = parseInt(process.env.UNIVERSAL_CLICK_TIMEOUT || '3000', 10);
+  const elementTimeout = parseInt(process.env.UNIVERSAL_WAIT_TIMEOUT || '3000', 10);
+  try { await btn.click({ timeout: clickTimeout, force: true }); return true; } catch {}
   try {
     const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const pattern = new RegExp(variants.map(escapeRegex).join('|'), 'i');
     const byRole = page.getByRole('button', { name: pattern }).first();
-    await byRole.waitFor({ timeout: 4000 });
-    await byRole.click({ timeout: 1500, force: true });
+    await byRole.waitFor({ timeout: elementTimeout });
+    await byRole.click({ timeout: clickTimeout, force: true });
     return true;
   } catch {}
   const handle = await btn.elementHandle();
@@ -55,42 +57,45 @@ export async function completePersonaliseMyProductsFlow(page) {
 
   // A generic option chooser by question text and option text
   const chooseOption = async (questionText, optionText) => {
-    const q = page.locator(`text=${questionText}`).first();
-    await q.waitFor({ timeout: 10000 });
-    const opt = page.locator([
-      `div[tabindex="0"]:has(h1:has-text("${optionText}"))`,
-      `button:has(h1:has-text("${optionText}"))`,
-      `[role="button"]:has-text("${optionText}")`
-    ].join(', ')).first();
-    await opt.waitFor({ timeout: 8000 }).catch(() => {});
-    try { await opt.click({ timeout: 1500, force: true }); } catch {}
+      const q = page.locator(`text=${questionText}`).first();
+  const waitTimeout = parseInt(process.env.UNIVERSAL_WAIT_TIMEOUT || '3000', 10);
+  const elementTimeout = parseInt(process.env.UNIVERSAL_WAIT_TIMEOUT || '3000', 10);
+  const clickTimeout = parseInt(process.env.UNIVERSAL_CLICK_TIMEOUT || '3000', 10);
+  await q.waitFor({ timeout: waitTimeout });
+  const opt = page.locator([
+    `div[tabindex="0"]:has(h1:has-text("${optionText}"))`,
+    `button:has(h1:has-text("${optionText}"))`,
+    `[role="button"]:has-text("${optionText}")`
+  ].join(', ')).first();
+  await opt.waitFor({ timeout: elementTimeout }).catch(() => {});
+  try { await opt.click({ timeout: clickTimeout, force: true }); } catch {}
     await clickNext();
   };
 
   // Employment
   try {
     const employed = (process.env.EMPLOYED || '1') === '1';
-    await chooseOption('Are you currently employed?', employed ? 'Yes' : 'No');
+    await chooseOption('Are you currently employed?', employed ? (process.env.EMPLOYED_YES_DISPLAY || 'Yes') : (process.env.EMPLOYED_NO_DISPLAY || 'No'));
   } catch {}
 
   // Income
   try {
     const band = (process.env.INCOME_BAND || 'highest').toLowerCase();
-    const opt = band === 'highest' ? 'R 25000+' : band === 'mid' ? 'R 15000 - R 25000' : 'R 0 - R 10000';
+    const opt = band === 'highest' ? (process.env.INCOME_HIGHEST_DISPLAY || 'R 25000+') : band === 'mid' ? (process.env.INCOME_MID_DISPLAY || 'R 15000 - R 25000') : (process.env.INCOME_LOW_DISPLAY || 'R 0 - R 10000');
     await chooseOption('What are you currently earning per month?', opt);
   } catch {}
 
   // Tax region
   try {
     const region = (process.env.TAX_REGION || 'sa_only').toLowerCase();
-    const opt = region === 'sa_only' ? 'South Africa Only' : 'South Africa and Other';
+    const opt = region === 'sa_only' ? (process.env.TAX_SA_ONLY_DISPLAY || 'South Africa Only') : (process.env.TAX_SA_AND_OTHER_DISPLAY || 'South Africa and Other');
     await chooseOption('Where are you registered for tax?', opt);
   } catch {}
 
   // Debt review / insolvent
   try {
     const underDebt = (process.env.DEBT_REVIEW || '0') === '1';
-    await chooseOption('Are you currently under debt review, or have you ever been declared insolvent?', underDebt ? 'Yes' : 'No');
+    await chooseOption('Are you currently under debt review, or have you ever been declared insolvent?', underDebt ? (process.env.DEBT_REVIEW_YES_DISPLAY || 'Yes') : (process.env.DEBT_REVIEW_NO_DISPLAY || 'No'));
   } catch {}
 
   // End of Personalise My Products flow (do NOT click Start Earning here)

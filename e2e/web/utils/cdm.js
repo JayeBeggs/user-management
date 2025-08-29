@@ -24,11 +24,11 @@ export async function verifyUserInCdm({ userIdText, raceOption }) {
     try {
       const base = new URL(cdmUrl).origin;
       const verifyUrl = base + '/users/identity-verification/';
-      await cdmPage.goto(verifyUrl, { waitUntil: 'domcontentloaded', timeout: 10000 }).catch(() => {});
+              await cdmPage.goto(verifyUrl, { waitUntil: 'domcontentloaded', timeout: parseInt(process.env.UNIVERSAL_WAIT_TIMEOUT || '3000', 10) }).catch(() => {});
 
       // Open matching user row
       try {
-        await cdmPage.waitForSelector('tr', { timeout: 5000 }).catch(() => {});
+        await cdmPage.waitForSelector('tr', { timeout: parseInt(process.env.UNIVERSAL_WAIT_TIMEOUT || '3000', 10) }).catch(() => {});
         const row = cdmPage.locator(`tr:has(td:has-text("${userIdText}"))`).first();
         if (await row.count()) {
           // Parse onclick URL
@@ -40,7 +40,7 @@ export async function verifyUserInCdm({ userIdText, raceOption }) {
             const dest = new URL(relative, cdmPage.url()).toString();
             await cdmPage.goto(dest);
           } else {
-            await row.click({ timeout: 1500, force: true });
+                          await row.click({ timeout: parseInt(process.env.UNIVERSAL_CLICK_TIMEOUT || '3000', 10), force: true });
           }
 
           // Verification detail: tick blocks and submit
@@ -64,19 +64,19 @@ export async function verifyUserInCdm({ userIdText, raceOption }) {
               if (await cb.count()) {
                 const checked = await cb.isChecked().catch(() => false);
                 if (!checked) {
-                  await cb.check({ timeout: 800, force: true }).catch(async () => { await cb.click({ timeout: 800, force: true }); });
+                  await cb.check({ timeout: parseInt(process.env.UNIVERSAL_CLICK_TIMEOUT || '3000', 10), force: true }).catch(async () => { await cb.click({ timeout: parseInt(process.env.UNIVERSAL_CLICK_TIMEOUT || '2000', 10), force: true }); });
                 }
                 return;
               }
               const labelText = labelMap[name];
               if (labelText) {
                 const label = block.locator(`label:has-text("${labelText}")`).first();
-                if (await label.count()) await label.click({ timeout: 800, force: true });
+                if (await label.count()) await label.click({ timeout: parseInt(process.env.UNIVERSAL_CLICK_TIMEOUT || '3000', 10), force: true });
               }
             };
 
             let blocks = cdmPage.locator('div.my-4');
-            await blocks.first().waitFor({ timeout: 5000 }).catch(() => {});
+            await blocks.first().waitFor({ timeout: parseInt(process.env.UNIVERSAL_WAIT_TIMEOUT || '3000', 10) }).catch(() => {});
             let firstBlock = blocks.nth(0);
             for (const n of firstNames) { await tickInBlock(firstBlock, n); }
             let form = firstBlock.locator('xpath=ancestor::form[1]');
@@ -84,7 +84,7 @@ export async function verifyUserInCdm({ userIdText, raceOption }) {
             if (await submit.count()) {
               await Promise.all([
                 cdmPage.waitForLoadState('domcontentloaded').catch(() => {}),
-                submit.click({ timeout: 2000, force: true })
+                submit.click({ timeout: parseInt(process.env.UNIVERSAL_CLICK_TIMEOUT || '3000', 10), force: true })
               ]);
               if (afterSubmitDelay > 0) await cdmPage.waitForTimeout(afterSubmitDelay);
             }
@@ -94,7 +94,7 @@ export async function verifyUserInCdm({ userIdText, raceOption }) {
             let secondBlock = blocks.nth(1);
             try {
               const latestLabel = cdmPage.locator('label:has-text("ID provided is the latest issued ID")').first();
-              await latestLabel.waitFor({ timeout: 15000 });
+              await latestLabel.waitFor({ timeout: parseInt(process.env.UNIVERSAL_WAIT_TIMEOUT || '3000', 10) });
               secondBlock = latestLabel.locator('xpath=ancestor::div[contains(@class, "my-4")][1]');
             } catch {}
             if (await secondBlock.count()) {
@@ -104,7 +104,7 @@ export async function verifyUserInCdm({ userIdText, raceOption }) {
               if (await submit.count()) {
                 await Promise.all([
                   cdmPage.waitForLoadState('domcontentloaded').catch(() => {}),
-                  submit.click({ timeout: 2000, force: true })
+                  submit.click({ timeout: parseInt(process.env.UNIVERSAL_CLICK_TIMEOUT || '3000', 10), force: true })
                 ]);
                 const afterRaceDelay = parseInt(process.env.INSPECT_CDM_AFTER_RACE_MS || process.env.INSPECT_CDM_AFTER_SUBMIT_MS || '100', 10);
                 if (afterRaceDelay > 0) await cdmPage.waitForTimeout(afterRaceDelay);
@@ -114,18 +114,18 @@ export async function verifyUserInCdm({ userIdText, raceOption }) {
             // Liveness review and approve
             try {
               const reviewForm = cdmPage.locator('form.review-form[action*="/users/review-liveness/"]');
-              await reviewForm.first().waitFor({ timeout: 10000 });
+              await reviewForm.first().waitFor({ timeout: parseInt(process.env.UNIVERSAL_WAIT_TIMEOUT || '3000', 10) });
               const liveNames = ['person_visible','enough_light','person_matches_id','sound_recorded','client_confirmed'];
               const tickLive = async (name) => {
                 let cb = reviewForm.locator(`input[name="${name}"]`);
                 if (!(await cb.count())) cb = reviewForm.locator(`#id_${name}`);
                 if (await cb.count()) {
                   const checked = await cb.isChecked().catch(() => false);
-                  if (!checked) { await cb.check({ timeout: 800, force: true }).catch(async () => { await cb.click({ timeout: 800, force: true }); }); }
+                  if (!checked) { await cb.check({ timeout: parseInt(process.env.UNIVERSAL_CLICK_TIMEOUT || '3000', 10), force: true }).catch(async () => { await cb.click({ timeout: parseInt(process.env.UNIVERSAL_CLICK_TIMEOUT || '3000', 10), force: true }); }); }
                   return;
                 }
                 const label = reviewForm.locator(`label:has-text("${name.replace(/_/g, ' ')}")`).first();
-                if (await label.count()) await label.click({ timeout: 800, force: true });
+                if (await label.count()) await label.click({ timeout: parseInt(process.env.UNIVERSAL_CLICK_TIMEOUT || '3000', 10), force: true });
               };
               for (const n of liveNames) { await tickLive(n); }
               // Submit live review

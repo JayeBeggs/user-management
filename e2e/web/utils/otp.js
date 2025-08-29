@@ -67,21 +67,23 @@ export async function getOtpFromAdmin(browser, { type } = {}) {
 }
 
 export async function getOtp({ browser, type } = {}) {
-  return await getOtpFromAdmin(browser, { type });
+  return await getOtpFromAdmin(browser, { type, keepContext: false });
 }
+
+
 
 export async function isOtpRequired(page) {
   const custom = process.env.OTP_CHECK_SELECTOR;
   if (custom) {
     try {
-      await page.waitForSelector(custom, { timeout: 2500 });
+      await page.waitForSelector(custom, { timeout: parseInt(process.env.UNIVERSAL_WAIT_TIMEOUT || '3000', 10) });
       return true;
     } catch {
       return false;
     }
   }
-  try { await page.getByLabel(/OTP/i).waitFor({ timeout: 2500 }); return true; } catch {}
-  try { await page.getByPlaceholder(/otp|one[- ]time|code/i).waitFor({ timeout: 2500 }); return true; } catch {}
+  try { await page.getByLabel(/OTP/i).waitFor({ timeout: parseInt(process.env.UNIVERSAL_WAIT_TIMEOUT || '3000', 10) }); return true; } catch {}
+  try { await page.getByPlaceholder(/otp|one[- ]time|code/i).waitFor({ timeout: parseInt(process.env.UNIVERSAL_WAIT_TIMEOUT || '3000', 10) }); return true; } catch {}
   return false;
 }
 
