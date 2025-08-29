@@ -10,7 +10,7 @@
     "pw:install": "playwright install --with-deps",
     "auth:app": "node ./e2e/web/auth/capture_app_state.js",
     "auth:cdm": "node ./e2e/web/auth/capture_cdm_state.js",
-    "test:web:create-5": "playwright test --config e2e/web/playwright.config.ts e2e/web/tests/create_users.spec.js",
+    "test:web:create": "playwright test --config e2e/web/playwright.config.ts e2e/web/tests/create_users.spec.js",
     "test:web:update": "playwright test --config e2e/web/playwright.config.ts e2e/web/tests/update_users.spec.js"
   },
   "devDependencies": {

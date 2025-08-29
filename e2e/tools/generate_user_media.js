@@ -26,8 +26,9 @@ const seed = process.env.TEST_SEED || String(Date.now());
 const outDir = path.resolve(process.cwd(), `e2e/.run_media/${seed}`);
 fs.mkdirSync(outDir, { recursive: true });
 
-// Generate SA ID
-const idObj = readJsonFromStdout('node', [path.resolve(process.cwd(), 'e2e/tools/sa_id_gen.js')]);
+// Generate SA ID unless TEST_ID provided
+const testId = process.env.TEST_ID && String(process.env.TEST_ID).replace(/\D/g, '');
+const idObj = testId ? { id: testId } : readJsonFromStdout('node', [path.resolve(process.cwd(), 'e2e/tools/sa_id_gen.js')]);
 
 // Compute issue date: today by default
 const issueDate = new Date().toISOString().slice(0,10);

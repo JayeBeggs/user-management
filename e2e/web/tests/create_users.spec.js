@@ -1,4 +1,5 @@
 import { test, expect, chromium } from '@playwright/test';
+import { clickStartEarning, loginWithPhone } from '../utils/app.js';
 import { getOtp, enterOtp } from '../utils/otp.js';
 import { setPhoneNumber, enterPin } from '../utils/inputs.js';
 import { clickUploadCta, uploadIdSection, recordLivenessWithRetry } from '../utils/kyc.js';
@@ -14,30 +15,9 @@ async function generateUserMedia() {
   return JSON.parse(res.stdout);
 }
 
-// (helper moved to utils/otp)
-
-// Note: Admin UI verification helper removed; CDM verification is handled via CDM UI window
-
-// (helper moved to utils/otp)
-
-// (helper moved to utils/otp)
-
-// (helper moved to utils/otp)
-
-// (helper moved to utils/kyc)
-
-// (helper moved to utils/kyc)
-
-// (helper moved to utils/kyc)
-
-// (helper moved to utils/kyc)
-
-// (helper moved to utils/kyc)
-
-// moved to utils/inputs
-// (helper moved to utils/inputs)
+//
 async function clickPinDigit(page, digitText = '0', times = 1) {
-  // Try the circular keypad key like the provided markup
+  // Click a keypad digit by trying several selectors
   let key = page.locator(`div[tabindex="0"]:has(h3:has-text("${digitText}"))`).first();
   if (!(await key.count())) key = page.locator(`div[tabindex="0"]:has-text("${digitText}")`).first();
   if (!(await key.count())) key = page.getByRole('button', { name: new RegExp(`^${digitText}$`) }).first();
@@ -56,8 +36,7 @@ async function clickPinDigit(page, digitText = '0', times = 1) {
   }
 }
 
-// moved to utils/inputs
-// (helper moved to utils/inputs)
+//
 async function isPinComplete(page, expectedLength = 4) {
   // Check per-digit inputs
   try {
@@ -96,30 +75,31 @@ test.describe('Signup flow creates multiple users via app with OTP', () => {
 
       console.log('Navigating to app');
       await page.goto('/');
-      // Landing: go to '/', then proceed with phone number -> SMS -> OTP
-      const phoneDigits = `082${Math.floor(1000000 + Math.random()*8999999)}`;
+      // Landing
+      const phoneDigits = (process.env.DEFAULT_PHONE && String(process.env.DEFAULT_PHONE).replace(/\D/g, ''))
+        || `082${Math.floor(1000000 + Math.random()*8999999)}`;
       const ok = await setPhoneNumber(page, phoneDigits);
       if (!ok) throw new Error('PHONE_INPUT_NOT_FILLED');
       console.log('Phone input filled:', phoneDigits);
-      // Click SMS button to move to OTP page if present
+      // Request OTP via SMS
 
       console.log('Clicking SMS to request OTP');
       await page.getByRole('button', { name: /sms/i }).click();
 
-      // Fetch OTP from admin panel using username/password-only flow
+      // Fetch OTP from admin panel
 
       console.log('Fetching OTP from admin');
-      const otp = await getOtp({ browser, page });
+      const otp = await getOtp({ browser, type: 'signup' });
       await enterOtp(page, otp);
       console.log('OTP entered');
 
 
 
-      // OTP verification continues automatically after entry; next screen shows Name input
+      // After OTP, wait for Name input
       console.log('Waiting for Name field');
       await page.locator('input[placeholder="Name"]').waitFor({ timeout: 20000 });
 
-      // Fill name on next screen, then click Next
+      // Fill Name then click Next
       {
         const base = String(media.seed || '').replace(/[^a-zA-Z0-9]/g, '');
         const nameValue = (`User${base}`).slice(0, 12);
@@ -136,7 +116,7 @@ test.describe('Signup flow creates multiple users via app with OTP', () => {
         console.log('Name submitted:', nameValue);
       }
 
-      // Fill ID number on the following screen, then click Next
+      // Fill ID and click Next
       {
         await page.waitForURL(/onboarding\/user-details\/id-number/i, { timeout: 20000 }).catch(() => {});
         const idDigits = String(media.id).replace(/\D/g, '').slice(0, 13);
@@ -163,7 +143,7 @@ test.describe('Signup flow creates multiple users via app with OTP', () => {
         console.log('ID number submitted:', idDigits);
       }
 
-      // Fill Email on the next screen, then click Next
+      // Fill Email and click Next
       {
         const base = String(media.seed || Date.now()).replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
         const emailValue = `test+${base.slice(0, 18)}@gmail.com`;
@@ -183,14 +163,14 @@ test.describe('Signup flow creates multiple users via app with OTP', () => {
         console.log('Email submitted:', emailValue);
       }
 
-      // Click the "I'm ready" button before KYC if present
+      // Click the "I'm ready" button before KYC
       try {
         const ready = page.locator('button:has-text("I\'m ready"), button:has(h1:has-text("I\'m ready")), [role="button"]:has-text("I\'m ready")').first();
         await ready.click({ timeout: 5000, force: true });
         console.log('Clicked first I\'m ready');
       } catch {}
 
-      // Select ID type: default to ID Card
+      // Select ID type: ID Card
       try {
         await page.locator('div:has(> button:has(h1))').first().waitFor({ timeout: 5000 }).catch(() => {});
         const card = page.locator('button:has-text("ID Card"), button:has(h1:has-text("ID Card")), [role="button"]:has-text("ID Card")').first();
@@ -198,11 +178,11 @@ test.describe('Signup flow creates multiple users via app with OTP', () => {
         console.log('Selected ID type: ID Card');
       } catch {}
 
-      // Some screens require clicking an Upload CTA to switch from camera to upload mode
+      // Click Upload CTA if present
       try { const did = await clickUploadCta(page); console.log('Upload CTA clicked:', !!did); } catch {}
 
       console.log('Uploading ID images');
-      // Click each dropzone and set files, then submit via Upload button
+      // Upload ID front/back and submit
       await uploadIdSection(page, 'ID Front', media.idFront);
       console.log('Set ID Front file:', media.idFront);
       await uploadIdSection(page, 'ID Back', media.idBack);
@@ -212,7 +192,7 @@ test.describe('Signup flow creates multiple users via app with OTP', () => {
       try {
         const uploadBtn = page.locator('button:has-text("Upload"), [role="button"]:has-text("Upload")').first();
         await uploadBtn.waitFor({ timeout: 10000 });
-        // Wait until clickable (pointer-events not none and opacity > 0.2)
+        // Wait until clickable
         await page.waitForFunction((el) => {
           const style = window.getComputedStyle(el);
           const pe = style.pointerEvents !== 'none';
@@ -223,23 +203,23 @@ test.describe('Signup flow creates multiple users via app with OTP', () => {
         console.log('Submitted ID images');
       } catch {}
 
-      // Continue after upload if a continue/submit button appears
+      // Continue/Submit after upload
       try {
         await page.getByRole('button', { name: /continue|submit/i }).first().click();
         console.log('Post-upload Continue/Submit clicked');
       } catch {}
 
-      // Click another "I'm ready" button if presented next
+      // Click second "I'm ready"
       try {
         const ready2 = page.locator('button:has-text("I\'m ready"), button:has(h1:has-text("I\'m ready")), [role="button"]:has-text("I\'m ready")').first();
         await ready2.click({ timeout: 5000, force: true });
         console.log('Clicked second I\'m ready');
       } catch {}
 
-      // Start/stop recording; if stop fails within 6s, reload and retry from I'm ready
+      // Start/stop liveness recording (with retry)
       try { await recordLivenessWithRetry(page); } catch {}
 
-      // After recording completes, wait for the next page/section and click Submit/Continue
+      // After recording, click Submit/Continue
       try {
         const submitBtn = page.locator([
           'button:has-text("Submit")',
@@ -254,7 +234,7 @@ test.describe('Signup flow creates multiple users via app with OTP', () => {
           'div[tabindex="0"]:has-text("Continue")'
         ].join(', ')).first();
         await submitBtn.waitFor({ timeout: 20000 });
-        // Wait for enabled/clickable state
+        // Wait for enabled/clickable
         const handle = await submitBtn.elementHandle();
         if (handle) {
           for (let i = 0; i < 30; i++) {
@@ -269,7 +249,7 @@ test.describe('Signup flow creates multiple users via app with OTP', () => {
             await page.waitForTimeout(250);
           }
         }
-        // Try multiple click strategies quickly
+        // Fallback click strategies
         let clicked = false;
         for (let i = 0; i < 3 && !clicked; i++) {
           try { await submitBtn.click({ timeout: 1000, force: true }); clicked = true; break; } catch {}
@@ -280,13 +260,13 @@ test.describe('Signup flow creates multiple users via app with OTP', () => {
         if (clicked) console.log('Liveness Submit/Continue clicked');
       } catch {}
 
-      // Enter PIN 0000 (handles keypad or input fallbacks)
+      // Enter PIN 0000
       try {
         await enterPin(page, '0000');
         console.log('PIN entered: 0000');
       } catch {}
 
-      // Click final Continue to finish user creation
+      // Final Continue to create user
       try {
         const contBtn = page.locator('button:has-text("Continue"), [role="button"]:has-text("Continue"), button:has(h1:has-text("Continue"))').first();
         await contBtn.waitFor({ timeout: 15000 });
@@ -305,13 +285,14 @@ test.describe('Signup flow creates multiple users via app with OTP', () => {
         console.log('Final Continue clicked');
       } catch {}
 
-      // Open CDM UI after user creation (auth only window) using saved CDM state, then pause
+      // CDM verification window
+      let launched;
+      let ctx;
       try {
         const cdmUrl = process.env.CDM_UI_URL || 'https://cdm.st4ge.com/';
         const channel = process.env.CDM_PW_BROWSER_CHANNEL || process.env.PW_BROWSER_CHANNEL || 'chrome';
-        const launched = await chromium.launch({ channel, headless: process.env.HEADLESS === '1' });
+        launched = await chromium.launch({ channel, headless: process.env.HEADLESS === '1' });
         const storageStatePath = process.env.PLAYWRIGHT_CDM_STATE || 'e2e/web/auth/.cdm_state.json';
-        let ctx;
         try {
           ctx = await launched.newContext({ storageState: storageStatePath });
         } catch {
@@ -321,19 +302,19 @@ test.describe('Signup flow creates multiple users via app with OTP', () => {
         await cdmPage.goto(cdmUrl);
         await cdmPage.waitForLoadState('domcontentloaded');
         console.log('Opened CDM UI (auth only):', { cdmUrl });
-        // Navigate directly to Verification page (faster than clicking)
+        // Navigate to Verification page
         try {
           const base = new URL(cdmUrl).origin;
           const verifyUrl = base + '/users/identity-verification/';
           console.log('Opening Verification URL:', verifyUrl);
           await cdmPage.goto(verifyUrl, { waitUntil: 'domcontentloaded', timeout: 10000 }).catch(() => {});
-          // Jump to the row matching the new user's ID (fast path: parse <tr onclick> and navigate directly)
+          // Jump to the row matching the new user's ID
           try {
             const idText = String(media.id);
             await cdmPage.waitForSelector('tr', { timeout: 5000 }).catch(() => {});
             const row = cdmPage.locator(`tr:has(td:has-text("${idText}"))`).first();
             if (await row.count()) {
-              // Parse onclick URL to avoid slow click/handlers
+              // Parse onclick URL
               const relative = await row.evaluate((el) => {
                 const m = (el.getAttribute('onclick') || '').match(/'([^']+)'/);
                 return m ? m[1] : null;
@@ -342,10 +323,10 @@ test.describe('Signup flow creates multiple users via app with OTP', () => {
                 const dest = new URL(relative, cdmPage.url()).toString();
                 await cdmPage.goto(dest);
               } else {
-                // Fallback to force click if no onclick found
+                // Fallback to force click
                 await row.click({ timeout: 1500, force: true });
               }
-              // On the verification detail page: tick first block, submit and wait for reload, then tick second block and submit
+              // Verification detail: tick blocks and submit
               try {
                 const labelMap = {
                   image_contains_id: 'Image contains an ID',
@@ -358,7 +339,7 @@ test.describe('Signup flow creates multiple users via app with OTP', () => {
                 };
                 const firstNames = ['image_contains_id','id_readable','id_of_person','image_in_color','id_condition','id_in_frame'];
                 const secondNames = ['image_contains_id','id_readable','id_of_person','image_in_color','id_condition','id_in_frame','latest_id'];
-                const afterSubmitDelay = parseInt(process.env.INSPECT_CDM_AFTER_SUBMIT_MS || '30000', 10);
+                const afterSubmitDelay = parseInt(process.env.INSPECT_CDM_AFTER_SUBMIT_MS || '100', 10);
                 const tickInBlock = async (block, name) => {
                   let cb = block.locator(`input[name="${name}"]`);
                   if (!(await cb.count())) cb = block.locator(`#id_${name}`);
@@ -388,7 +369,7 @@ test.describe('Signup flow creates multiple users via app with OTP', () => {
                   ]);
                   //if (afterSubmitDelay > 0) await cdmPage.waitForTimeout(afterSubmitDelay);
                 }
-                // After reload, handle second block (wait for a marker unique to block 2)
+                // Second block
                 blocks = cdmPage.locator('div.my-4');
                 let secondBlock = blocks.nth(1);
                 try {
@@ -408,15 +389,15 @@ test.describe('Signup flow creates multiple users via app with OTP', () => {
                     //if (afterSubmitDelay > 0) await cdmPage.waitForTimeout(afterSubmitDelay);
                   }
                 }
-                // Handle race update form next
+                // Race update form
                 try {
                   // Find form by action or class
                   const raceForm = cdmPage.locator('form.update-form[action*="/users/update-race/"]');
                   await raceForm.first().waitFor({ timeout: 10000 });
-                  // Select a race (default to White unless RACE_OPTION env provided)
+                  // Select a race
                   const raceValue = (process.env.RACE_OPTION || 'coloured').toLowerCase();
                   const select = raceForm.locator('select#id_race, select[name="race"]').first();
-                  // Try by value, then by visible text, then via keyboard
+                  // Try by value, then label, then keyboard
                   let selected = false;
                   try { await select.selectOption(raceValue); selected = true; } catch {}
                   if (!selected) {
@@ -434,12 +415,12 @@ test.describe('Signup flow creates multiple users via app with OTP', () => {
                       cdmPage.waitForLoadState('domcontentloaded').catch(() => {}),
                       updateBtn.click({ timeout: 2000, force: true })
                     ]);
-                    const afterRaceDelay = parseInt(process.env.INSPECT_CDM_AFTER_RACE_MS || process.env.INSPECT_CDM_AFTER_SUBMIT_MS || '15000', 10);
+                    const afterRaceDelay = parseInt(process.env.INSPECT_CDM_AFTER_RACE_MS || process.env.INSPECT_CDM_AFTER_SUBMIT_MS || '100', 10);
                     if (afterRaceDelay > 0) await cdmPage.waitForTimeout(afterRaceDelay);
                   }
                 } catch {}
 
-                // Handle liveness review form and final approve
+                // Liveness review and Approve
                 try {
                   const reviewForm = cdmPage.locator('form.review-form[action*="/users/review-liveness/"]');
                   await reviewForm.first().waitFor({ timeout: 10000 });
@@ -463,18 +444,136 @@ test.describe('Signup flow creates multiple users via app with OTP', () => {
                       submitLive.click({ timeout: 1500, force: true })
                     ]);
                   }
-                  // After reload, click Approve
+                  // Approve
                   try {
                     const approveBtn = cdmPage.locator('button:has-text("Approve"), [role="button"]:has-text("Approve"), .btn:has-text("Approve")').first();
                     await approveBtn.waitFor({ timeout: 8000 });
                     await approveBtn.click({ timeout: 1500, force: true });
-                    const afterApproveDelay = parseInt(process.env.INSPECT_CDM_AFTER_APPROVE_MS || '3000', 10);
-                    if (afterApproveDelay > 0) await cdmPage.waitForTimeout(afterApproveDelay);
-                    // Refresh the main app window after approval and optionally wait
+                    // After approval, login as the created user and continue
                     try {
-                      await page.reload({ waitUntil: 'domcontentloaded' });
-                      const appDelay = parseInt(process.env.INSPECT_APP_AFTER_APPROVE_MS || '0', 10);
-                      if (appDelay > 0) await page.waitForTimeout(appDelay);
+                      await page.goto('/');
+                      await loginWithPhone(page, browser);
+                      // Continue: Personalise My Products and onward
+                      try {
+                        const personalise = page.locator('button:has(h1:has-text("Personalise My Products")), button:has-text("Personalise My Products"), [role="button"]:has-text("Personalise My Products")').first();
+                        await personalise.waitFor({ timeout: 10000 }).catch(() => {});
+                        try { await personalise.click({ timeout: 2000, force: true }); } catch {}
+                      } catch {}
+                      // Next: click "Lets Go!" / "Let's Go!" if present
+                      try {
+                        const letsGo = page.locator(
+                          [
+                            'button:has(h1:has-text("Lets Go!"))',
+                            'button:has(h1:has-text("Let\'s Go!"))',
+                            'button:has-text("Lets Go!")',
+                            'button:has-text("Let\'s Go!")',
+                            '[role="button"]:has-text("Lets Go!")',
+                            '[role="button"]:has-text("Let\'s Go!")'
+                          ].join(', ')
+                        ).first();
+                        await letsGo.waitFor({ timeout: 8000 }).catch(() => {});
+                        try { await letsGo.click({ timeout: 2000, force: true }); } catch {}
+                      } catch {}
+                      // Then: click "Next" if present
+                      try {
+                        const nextBtn = page.locator(
+                          [
+                            'button:has(h1:has-text("Next"))',
+                            'button:has-text("Next")',
+                            '[role="button"]:has-text("Next")'
+                          ].join(', ')
+                        ).first();
+                        await nextBtn.waitFor({ timeout: 8000 }).catch(() => {});
+                        try { await nextBtn.click({ timeout: 2000, force: true }); } catch {}
+                      } catch {}
+                      // Employment status: select Yes/No and click Next
+                      try {
+                        const question = page.locator('text=Are you currently employed?').first();
+                        await question.waitFor({ timeout: 8000 });
+                        const employed = (process.env.EMPLOYED || '1') === '1';
+                        const choice = employed
+                          ? page.locator('div[tabindex="0"]:has(h1:has-text("Yes")), button:has(h1:has-text("Yes")), [role="button"]:has-text("Yes")').first()
+                          : page.locator('div[tabindex="0"]:has(h1:has-text("No")), button:has(h1:has-text("No")), [role="button"]:has-text("No")').first();
+                        await choice.waitFor({ timeout: 5000 }).catch(() => {});
+                        try { await choice.click({ timeout: 1500, force: true }); } catch {}
+                        const next2 = page.locator(
+                          [
+                            'button:has(h1:has-text("Next"))',
+                            'button:has-text("Next")',
+                            '[role="button"]:has-text("Next")'
+                          ].join(', ')
+                        ).first();
+                        await next2.waitFor({ timeout: 8000 }).catch(() => {});
+                        try { await next2.click({ timeout: 1500, force: true }); } catch {}
+                      } catch {}
+                      // Income band: select highest ("R 25000+") and click Next
+                      try {
+                        const incomeQ = page.locator('text=What are you currently earning per month?').first();
+                        await incomeQ.waitFor({ timeout: 8000 });
+                        const highest = page.locator(
+                          [
+                            'div[tabindex="0"]:has(h1:has-text("R 25000+"))',
+                            'button:has(h1:has-text("R 25000+"))',
+                            '[role="button"]:has-text("R 25000+")'
+                          ].join(', ')
+                        ).first();
+                        await highest.waitFor({ timeout: 5000 }).catch(() => {});
+                        try { await highest.click({ timeout: 1500, force: true }); } catch {}
+                        const next3 = page.locator(
+                          [
+                            'button:has(h1:has-text("Next"))',
+                            'button:has-text("Next")',
+                            '[role="button"]:has-text("Next")'
+                          ].join(', ')
+                        ).first();
+                        await next3.waitFor({ timeout: 8000 }).catch(() => {});
+                        try { await next3.click({ timeout: 1500, force: true }); } catch {}
+                      } catch {}
+                      // Tax registration: default select "South Africa Only" and click Next
+                      try {
+                        const taxQ = page.locator('text=Where are you registered for tax?').first();
+                        await taxQ.waitFor({ timeout: 8000 });
+                        const saOnly = page.locator(
+                          [
+                            'div[tabindex="0"]:has(h1:has-text("South Africa Only"))',
+                            'button:has(h1:has-text("South Africa Only"))',
+                            '[role="button"]:has-text("South Africa Only")'
+                          ].join(', ')
+                        ).first();
+                        await saOnly.waitFor({ timeout: 5000 }).catch(() => {});
+                        try { await saOnly.click({ timeout: 1500, force: true }); } catch {}
+                        const next4 = page.locator(
+                          [
+                            'button:has(h1:has-text("Next"))',
+                            'button:has-text("Next")',
+                            '[role="button"]:has-text("Next")'
+                          ].join(', ')
+                        ).first();
+                        await next4.waitFor({ timeout: 8000 }).catch(() => {});
+                        try { await next4.click({ timeout: 1500, force: true }); } catch {}
+                      } catch {}
+                      // Debt review/insolvency: default select "No" and click Next
+                      try {
+                        const debtQ = page.locator('text=Are you currently under debt review, or have you ever been declared insolvent?').first();
+                        await debtQ.waitFor({ timeout: 8000 });
+                        const underDebt = (process.env.DEBT_REVIEW || '0') === '1';
+                        const choice = underDebt
+                          ? page.locator('div[tabindex="0"]:has(h1:has-text("Yes")), button:has(h1:has-text("Yes")), [role="button"]:has-text("Yes")').first()
+                          : page.locator('div[tabindex="0"]:has(h1:has-text("No")), button:has(h1:has-text("No")), [role="button"]:has-text("No")').first();
+                        await choice.waitFor({ timeout: 5000 }).catch(() => {});
+                        try { await choice.click({ timeout: 1500, force: true }); } catch {}
+                        const next5 = page.locator(
+                          [
+                            'button:has(h1:has-text("Next"))',
+                            'button:has-text("Next")',
+                            '[role="button"]:has-text("Next")'
+                          ].join(', ')
+                        ).first();
+                        await next5.waitFor({ timeout: 8000 }).catch(() => {});
+                        try { await next5.click({ timeout: 1500, force: true }); } catch {}
+                      } catch {}
+                      // Click Start Earning to finish onboarding
+                      await clickStartEarning(page);
                     } catch {}
                   } catch {}
                 } catch {}
@@ -482,17 +581,14 @@ test.describe('Signup flow creates multiple users via app with OTP', () => {
             }
           } catch {}
         } catch {}
-        const cdmDelay = parseInt(process.env.INSPECT_CDM_DELAY_MS || process.env.INSPECT_DELAY_MS || '90000', 10);
-        if (cdmDelay > 0) await cdmPage.waitForTimeout(cdmDelay);
-        const keepOpen = process.env.INSPECT_CDM_KEEP_OPEN === '1';
-        if (!keepOpen) {
-          await ctx.close();
-          await launched.close();
-        }
       } catch {}
+      finally {
+        try { await ctx?.close(); } catch {}
+        try { await launched?.close(); } catch {}
+      }
 
       {
-        const inspectDelay = parseInt(process.env.INSPECT_DELAY_MS || '100000', 10);
+        const inspectDelay = parseInt(process.env.INSPECT_DELAY_MS || '100', 10);
         if (inspectDelay > 0) {
           await page.waitForTimeout(inspectDelay);
         }

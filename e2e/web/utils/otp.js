@@ -1,6 +1,6 @@
 import { chromium } from '@playwright/test';
 
-export async function getOtpFromAdmin(browser) {
+export async function getOtpFromAdmin(browser, { type } = {}) {
   const useSeparate = process.env.OTP_SEPARATE_BROWSER !== '0';
   const channel = process.env.PW_BROWSER_CHANNEL || undefined;
   const launched = useSeparate ? await chromium.launch({ channel, headless: process.env.HEADLESS === '1' }) : null;
@@ -9,7 +9,9 @@ export async function getOtpFromAdmin(browser) {
   const page = await context.newPage();
   const usersUrl = process.env.DJANGO_ADMIN_USERS_URL || 'https://cdm.st4ge.com/2tNFZrSGvTr9CqKM8Wsf5alcO9mBNwo4/users/user/';
   const adminRoot = usersUrl.replace(/users\/user\/?\.*/, '');
-  let otpListUrl = process.env.CDM_OTP_URL || usersUrl.replace('/users/user/', '/users/otp/');
+  const loginOtpUrl = process.env.CDM_OTP_URL || usersUrl.replace('/users/user/', '/users/otp/');
+  const signupOtpUrl = process.env.CDM_SIGNUP_OTP_URL || usersUrl.replace('/users/user/', '/users/signupotp/');
+  let otpListUrl = type === 'login' ? loginOtpUrl : signupOtpUrl || loginOtpUrl;
   if (!/\?/.test(otpListUrl)) otpListUrl += '?o=-5';
   console.log('Opening admin root:', adminRoot);
   await page.goto(adminRoot);
@@ -35,9 +37,9 @@ export async function getOtpFromAdmin(browser) {
   console.log('Opening admin OTP list:', otpListUrl);
   await page.goto(otpListUrl);
   await page.waitForLoadState('domcontentloaded');
-  await page.waitForSelector('#result_list tbody tr th.field-user a', { timeout: parseInt(process.env.OTP_ADMIN_TIMEOUT || '15000', 10) });
+  await page.waitForSelector('#result_list tbody tr th.field-user a', { timeout: parseInt(process.env.OTP_ADMIN_TIMEOUT || '100000', 10) });
   await page.locator('#result_list tbody tr th.field-user a').first().click();
-  const timeoutMs = parseInt(process.env.OTP_ADMIN_TIMEOUT || '15000', 10);
+  const timeoutMs = parseInt(process.env.OTP_ADMIN_TIMEOUT || '100000', 10);
   let otp = '';
   const pinInput = page.locator('input#id_pin, input[name="pin"]');
   try {
@@ -64,8 +66,8 @@ export async function getOtpFromAdmin(browser) {
   return otp;
 }
 
-export async function getOtp({ browser }) {
-  return await getOtpFromAdmin(browser);
+export async function getOtp({ browser, type } = {}) {
+  return await getOtpFromAdmin(browser, { type });
 }
 
 export async function isOtpRequired(page) {

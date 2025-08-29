@@ -27,7 +27,7 @@ async function main() {
 
   const waitSelector = process.env.APP_WAIT_SELECTOR; // e.g. [data-test="user-avatar"]
   const waitUrlRegex = process.env.APP_WAIT_URL_REGEX; // e.g. ^https://app\.st4ge\.com/(dashboard|home)
-  const waitSeconds = parseInt(process.env.APP_WAIT_SECONDS || '300', 10);
+  const waitSeconds = parseInt(process.env.APP_WAIT_SECONDS || '100', 10);
   const waitMs = waitSeconds * 1000;
 
   console.log('Complete Vercel app auth in the opened browser.');

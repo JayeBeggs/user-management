@@ -1,4 +1,7 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+// Load base .env then override with .env.local if present
+dotenv.config({ path: '.env' });
+dotenv.config({ path: '.env.local', override: true });
 import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
