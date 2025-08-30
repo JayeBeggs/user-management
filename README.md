@@ -1,16 +1,16 @@
 # Kastelo E2E Testing Suite
 
-A comprehensive end-to-end testing framework for the Kastelo financial application using Playwright. This suite automates user registration, KYC verification, personalisation, and onboarding flows with intelligent OTP handling and CDM admin panel integration.
+End-to-end testing framework for the Kastelo financial application using Playwright. Automates user registration, KYC verification, personalisation, and onboarding flows with OTP handling and CDM admin panel integration.
 
-## 🚀 Features
+## Functionality
 
-- **Complete User Journey Testing**: From signup to earning activation
-- **Automated KYC Processing**: ID document upload and liveness verification
-- **Smart OTP Handling**: Automatic OTP retrieval from CDM admin panel
-- **Dynamic Media Generation**: Synthetic ID cards and user data
-- **Multi-Browser Support**: Chromium, Chrome, Edge with camera/microphone permissions
-- **Robust Error Handling**: Intelligent fallbacks and retry mechanisms
-- **Environment-Driven Configuration**: Flexible test parameters via environment variables
+- User journey testing from signup to earning activation
+- KYC processing with ID document upload and liveness verification
+- OTP retrieval from CDM admin panel
+- Synthetic ID card and user data generation
+- Browser support for Chromium, Chrome, Edge with camera/microphone permissions
+- Error handling with fallbacks and retry mechanisms
+- Environment-based configuration
 
 ## 📁 Project Structure
 
@@ -21,9 +21,9 @@ e2e/
 │   │   ├── capture_app_state.js    # Capture app login state
 │   │   └── capture_cdm_state.js    # Capture CDM admin state
 │   ├── tests/                   # Test specifications
-│   │   ├── signup.spec.js               # User signup + KYC + PIN only
+│   │   ├── signup.spec.js               # User signup + KYC + PIN only (know your customer)
 │   │   ├── user_verification.spec.js    # CDM admin verification only
-│   │   ├── signup_users.spec.js         # Combined signup + verification
+│   │   ├── signup_verify.spec.js        # Combined signup + verification
 │   │   ├── personalise_products.spec.js # Product personalisation
 │   │   ├── start_earning.spec.js        # Earning activation
 │   │   ├── complete_onboarding.spec.js  # Full onboarding flow
@@ -33,7 +33,7 @@ e2e/
 │   │   ├── app.js                  # App interaction helpers
 │   │   ├── inputs.js               # Input handling (phone, PIN)
 │   │   ├── otp.js                  # OTP retrieval from CDM
-│   │   ├── kyc.js                  # KYC upload and liveness
+│   │   ├── kyc.js                  # KYC (Know Your Customer) upload and liveness
 │   │   └── cdm.js                  # CDM admin panel operations
 │   └── playwright.config.ts     # Playwright configuration
 └── tools/                       # Media generation tools
@@ -42,25 +42,21 @@ e2e/
     └── sa_id_gen.js               # South African ID generation
 ```
 
-## 🏗️ Architecture Highlights
+## Architecture
 
-### Helper Functions & Code Reuse
-- **`completeUserCreationFlow()`** - Unified signup + KYC + verification flow
-- **`fetchOtpWithFallback()`** - Smart OTP retrieval with login/signup fallback
-- **`ensurePersonalisationComplete()`** - Intelligent personalisation check and completion
-- **`executePersonalisationFlow()`** & **`executeStartEarningFlow()`** - Standardized flow execution
+### Helper Functions
+- `completeUserCreationFlow()` - Unified signup + KYC + verification flow
+- `fetchOtpWithFallback()` - OTP retrieval with login/signup fallback
+- `ensurePersonalisationComplete()` - Personalisation check and completion
+- `executePersonalisationFlow()` & `executeStartEarningFlow()` - Standardized flow execution
 
-### Performance Optimizations
-- **CDM Auth State Reuse** - Shared authentication sessions eliminate repeated logins
-- **Consolidated Timeouts** - `UNIVERSAL_CLICK_TIMEOUT` and `UNIVERSAL_WAIT_TIMEOUT` for consistency
-- **Parallel Tool Execution** - Optimized for maximum efficiency
+### Implementation Details
+- CDM authentication state reuse to avoid repeated logins
+- Consolidated timeouts via `UNIVERSAL_CLICK_TIMEOUT` and `UNIVERSAL_WAIT_TIMEOUT`
+- Modular test design with separate signup creation and verification phases
+- Standardized error handling and logging patterns
 
-### Test Flow Separation
-- **Modular Design** - Split signup into creation and verification phases
-- **Clean Dependencies** - Each test file imports only what it needs
-- **Consistent Patterns** - Standardized error handling and logging across all flows
-
-## 🛠️ Installation
+## Installation
 
 ### Prerequisites
 - Node.js 18+ 
@@ -79,11 +75,16 @@ npm run auth:app    # Capture app login state
 npm run auth:cdm    # Capture CDM admin state
 ```
 
-## ⚙️ Configuration
+## Configuration
 
 ### Environment Variables
 
 Create `.env` and `.env.local` files in the project root:
+
+> **💡 Quick Setup:** If you have `.env.local.bak`, copy it to `.env.local`:
+> ```bash
+> cp .env.local.bak .env.local
+> ```
 
 ```bash
 # Application URLs
@@ -134,7 +135,7 @@ PW_BROWSER_CHANNEL=chrome
 | `UNIVERSAL_CLICK_TIMEOUT` | Global click timeout | `3000ms` |
 | `UNIVERSAL_WAIT_TIMEOUT` | Global wait timeout | `3000ms` |
 
-## 🧪 Test Suites
+## Test Suites
 
 ### Individual Test Flows
 
@@ -146,7 +147,7 @@ npm run test:web:signup
 npm run test:web:verify
 
 # Combined User Creation + Verification
-npm run test:web:signup-users
+npm run test:web:signup-verify
 
 # Product Personalisation (after login)
 npm run test:web:personalise
@@ -174,30 +175,30 @@ npm run gen:sa-id
 npm run gen:media
 ```
 
-## 🔧 Core Utilities
+## Core Utilities
 
 ### Phone & PIN Input (`utils/inputs.js`)
-- **`setPhoneNumber(page, digits)`**: Robust phone number input with multiple fallback strategies
-- **`enterPin(page, code)`**: PIN entry for login (keypad + input field support)
-- **`createPin(page, code)`**: PIN creation during signup (keypad interaction)
-- **`isPinComplete(page, expectedLength)`**: Validates PIN completion across different UI patterns
+- `setPhoneNumber(page, digits)` - Phone number input with fallback strategies
+- `enterPin(page, code)` - PIN entry for login (keypad + input field support)
+- `createPin(page, code)` - PIN creation during signup (keypad interaction)
+- `isPinComplete(page, expectedLength)` - Validates PIN completion
 
 ### OTP Management (`utils/otp.js`)
-- **`getOtp({browser, type})`**: Retrieves OTP from CDM admin panel
-- **`enterOtp(page, otp)`**: Enters OTP with support for single/multi-input fields
-- Smart routing between login (`CDM_OTP_URL`) and signup (`CDM_SIGNUP_OTP_URL`) endpoints
+- `getOtp({browser, type})` - Retrieves OTP from CDM admin panel
+- `enterOtp(page, otp)` - Enters OTP with support for single/multi-input fields
+- Routes between login (`CDM_OTP_URL`) and signup (`CDM_SIGNUP_OTP_URL`) endpoints
 
 ### App Interactions (`utils/app.js`)
-- **`clickButtonByText(page, texts, timeout)`**: Generic button clicker with text variants
-- **`completePersonaliseMyProductsFlow(page)`**: Complete personalisation questionnaire
-- **`loginWithPhone(page, browser)`**: Full login flow with phone + OTP + PIN
+- `clickButtonByText(page, texts, timeout)` - Generic button clicker with text variants
+- `completePersonaliseMyProductsFlow(page)` - Complete personalisation questionnaire
+- `loginWithPhone(page, browser)` - Full login flow with phone + OTP + PIN
 
 ### KYC Processing (`utils/kyc.js`)
-- **`uploadIdSection(page, label, filePath)`**: Upload ID documents
-- **`recordLivenessWithRetry(page)`**: Liveness detection with camera
-- **`ensureCameraReady(page)`**: Camera permission and readiness checks
+- `uploadIdSection(page, label, filePath)` - Upload ID documents
+- `recordLivenessWithRetry(page)` - Liveness detection with camera
+- `ensureCameraReady(page)` - Camera permission and readiness checks
 
-## 📊 Test Flows
+## Test Flows
 
 ### 1. User Signup Flow (`signup_users.spec.js`)
 ```
