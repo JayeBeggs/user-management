@@ -81,9 +81,9 @@ npm run auth:cdm    # Capture CDM admin state
 
 Create `.env` and `.env.local` files in the project root:
 
-> **💡 Quick Setup:** If you have `.env.local.bak`, copy it to `.env.local`:
+> **💡 Quick Setup:** If you have `.env.local.eg`, copy it to `.env.local`:
 > ```bash
-> cp .env.local.bak .env.local
+> cp .env.local.eg .env.local
 > ```
 
 ```bash
