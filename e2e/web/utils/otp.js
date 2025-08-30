@@ -5,7 +5,19 @@ export async function getOtpFromAdmin(browser, { type } = {}) {
   const channel = process.env.PW_BROWSER_CHANNEL || undefined;
   const launched = useSeparate ? await chromium.launch({ channel, headless: process.env.HEADLESS === '1' }) : null;
   const targetBrowser = launched || browser;
-  const context = await targetBrowser.newContext();
+  
+  // Use saved CDM auth state if available
+  const storageStatePath = process.env.PLAYWRIGHT_CDM_STATE || 'e2e/web/auth/.cdm_state.json';
+  let context;
+  
+  try {
+    context = await targetBrowser.newContext({ storageState: storageStatePath });
+    console.log('✅ OTP: Using saved CDM auth state from:', storageStatePath);
+  } catch {
+    console.log('⚠️ OTP: CDM auth state not found, creating new session');
+    context = await targetBrowser.newContext();
+  }
+  
   const page = await context.newPage();
   const usersUrl = process.env.DJANGO_ADMIN_USERS_URL || 'https://cdm.st4ge.com/2tNFZrSGvTr9CqKM8Wsf5alcO9mBNwo4/users/user/';
   const adminRoot = usersUrl.replace(/users\/user\/?\.*/, '');
@@ -60,6 +72,17 @@ export async function getOtpFromAdmin(browser, { type } = {}) {
     const match = bodyText.match(/\b(\d{4,8})\b/);
     if (match) otp = match[1];
   }
+  
+  // Save CDM auth state for reuse if OTP was successfully fetched
+  if (otp) {
+    try {
+      await context.storageState({ path: storageStatePath });
+      console.log('✅ OTP: CDM auth state saved to:', storageStatePath);
+    } catch (error) {
+      console.log('⚠️ OTP: Failed to save CDM auth state:', error.message);
+    }
+  }
+  
   await context.close();
   if (launched) await launched.close();
   if (!otp) throw new Error('ADMIN_OTP_NOT_FOUND');

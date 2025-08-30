@@ -21,7 +21,9 @@ e2e/
 │   │   ├── capture_app_state.js    # Capture app login state
 │   │   └── capture_cdm_state.js    # Capture CDM admin state
 │   ├── tests/                   # Test specifications
-│   │   ├── create_users.spec.js         # User signup + KYC flow
+│   │   ├── signup.spec.js               # User signup + KYC + PIN only
+│   │   ├── user_verification.spec.js    # CDM admin verification only
+│   │   ├── signup_users.spec.js         # Combined signup + verification
 │   │   ├── personalise_products.spec.js # Product personalisation
 │   │   ├── start_earning.spec.js        # Earning activation
 │   │   ├── complete_onboarding.spec.js  # Full onboarding flow
@@ -39,6 +41,24 @@ e2e/
     ├── make_id_images.js           # ID card image generation
     └── sa_id_gen.js               # South African ID generation
 ```
+
+## 🏗️ Architecture Highlights
+
+### Helper Functions & Code Reuse
+- **`completeUserCreationFlow()`** - Unified signup + KYC + verification flow
+- **`fetchOtpWithFallback()`** - Smart OTP retrieval with login/signup fallback
+- **`ensurePersonalisationComplete()`** - Intelligent personalisation check and completion
+- **`executePersonalisationFlow()`** & **`executeStartEarningFlow()`** - Standardized flow execution
+
+### Performance Optimizations
+- **CDM Auth State Reuse** - Shared authentication sessions eliminate repeated logins
+- **Consolidated Timeouts** - `UNIVERSAL_CLICK_TIMEOUT` and `UNIVERSAL_WAIT_TIMEOUT` for consistency
+- **Parallel Tool Execution** - Optimized for maximum efficiency
+
+### Test Flow Separation
+- **Modular Design** - Split signup into creation and verification phases
+- **Clean Dependencies** - Each test file imports only what it needs
+- **Consistent Patterns** - Standardized error handling and logging across all flows
 
 ## 🛠️ Installation
 
@@ -91,6 +111,9 @@ NUM_USERS=1
 EMPLOYED=1
 INCOME_BAND=highest
 TAX_REGION=sa_only
+
+# User Verification
+VERIFY_USER_IDS=8207106197083,8301234567890  # Comma-separated list of ID numbers to verify
 DEBT_REVIEW=0
 
 # Browser Settings
@@ -116,19 +139,25 @@ PW_BROWSER_CHANNEL=chrome
 ### Individual Test Flows
 
 ```bash
-# User Creation (Signup + KYC)
-npm run test:web:create
+# User Creation (Signup + KYC + PIN creation only)
+npm run test:web:signup
+
+# CDM Admin Verification (separate process)
+npm run test:web:verify
+
+# Combined User Creation + Verification
+npm run test:web:signup-users
 
 # Product Personalisation (after login)
 npm run test:web:personalise
 
-# Start Earning Activation
+# Start Earning Activation (with smart personalisation check)
 npm run test:web:start-earning
 
 # Complete Onboarding (Personalise + Start Earning)
 npm run test:web:onboarding
 
-# Full Journey (Signup + Personalise + Start Earning)
+# Full Journey (Signup + Verification + Login + Personalise + Start Earning)
 npm run test:web:full-journey
 ```
 
@@ -170,7 +199,7 @@ npm run gen:media
 
 ## 📊 Test Flows
 
-### 1. User Creation Flow (`create_users.spec.js`)
+### 1. User Signup Flow (`signup_users.spec.js`)
 ```
 Navigate to App → Enter Phone → Request OTP → Enter OTP → 
 Fill Name → Fill ID Number → Fill Email → Select ID Type → 
@@ -227,7 +256,7 @@ Separate CDM Verification → Login → Personalisation → Start Earning
 ### Enable Debug Mode
 ```bash
 # Verbose Playwright logs
-DEBUG=pw:api npm run test:web:create
+DEBUG=pw:api npm run test:web:signup
 
 # Run in headed mode
 HEADLESS=0 npm run test:web:personalise
